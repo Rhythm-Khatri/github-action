@@ -20,13 +20,23 @@ jobs:
         with:
           node-version: '16' # Adjust based on your Node.js version
 
-      # Step 3: Set up AWS credentials
-      - name: Configure AWS credentials
+      # Step 3: Set up AWS credentials for staging (dev branch)
+      - name: Configure AWS credentials for staging
+        if: github.ref == 'refs/heads/dev'
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1 # Replace with your AWS region
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_STAGING }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_STAGING }}
+          aws-region: us-west-2 # Replace with your AWS region
+
+      # Step 4: Set up AWS credentials for production (main branch)
+      - name: Configure AWS credentials for production
+        if: github.ref == 'refs/heads/main'
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
+          aws-region: us-west-2 # Replace with your AWS region
 
       # Step 4: Detect changed directories
       - name: Get changed Lambda directories
