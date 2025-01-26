@@ -45,16 +45,17 @@ jobs:
           # Find which directories have changed
           CHANGED_DIRS=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | awk -F/ '{print $1}' | sort -u)
           echo "Changed directories: $CHANGED_DIRS"
-          echo "::set-output name=dirs::$CHANGED_DIRS"
+          echo "dirs=$CHANGED_DIRS" >> $GITHUB_ENV
 
       # Step 6: Deploy each changed Lambda
       - name: Deploy SAM Lambdas
         env:
           SAM_CLI_TELEMETRY: 0
           ENV_PROFILE: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+          CHANGED_DIRS: ${{ env.dirs }}
         run: |
           echo "Environment: $ENV_PROFILE"
-          for DIR in ${{ steps.get-changes.outputs.dirs }}; do
+          for DIR in $CHANGED_DIRS; do
             if [ -f "$DIR/template.yaml" ]; then
               echo "Deploying Lambda function in $DIR"
               cd $DIR
