@@ -40,11 +40,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
           aws-region: us-west-2 # Replace with your AWS region
 
-      # Step 5: Debug AWS credentials
-      - name: Verify AWS configuration
-        run: aws sts get-caller-identity
-
-      # Step 6: Detect changed directories
+      # Step 5: Detect changed directories
       - name: Get changed Lambda directories
         id: get-changes
         run: |
@@ -57,31 +53,34 @@ jobs:
           echo "Changed directories: $CHANGED_DIRS"
           echo "dirs=$CHANGED_DIRS" >> $GITHUB_ENV
 
-      # Step 7: Deploy each changed Lambda
+      # Step 6: Deploy each changed Lambda
       - name: Deploy SAM Lambdas
         env:
           SAM_CLI_TELEMETRY: 0
           CHANGED_DIRS: ${{ env.dirs }}
         run: |
-          echo "Deploying Lambdas..."
+          # Determine the environment (dev or prod)
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            DEPLOY_ENV="prod"
+          else
+            DEPLOY_ENV="dev"
+          fi
+
+          echo "Deploying to environment: $DEPLOY_ENV"
+          
           for DIR in $CHANGED_DIRS; do
             if [ -f "$DIR/template.yaml" ]; then
               echo "Deploying Lambda function in $DIR"
               cd $DIR
               echo "Running sam build in $DIR"
               sam build
-              if [ $? -eq 0 ]; then
-                echo "sam build successful in $DIR"
-              else
+              if [ $? -ne 0 ]; then
                 echo "sam build failed in $DIR"
                 exit 1
               fi
-              echo "Running sam deploy in $DIR"
-              # Deploy without using --profile
+              echo "Running sam deploy in $DIR for $DEPLOY_ENV environment"
               sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM
-              if [ $? -eq 0 ]; then
-                echo "sam deploy successful in $DIR"
-              else
+              if [ $? -ne 0 ]; then
                 echo "sam deploy failed in $DIR"
                 exit 1
               fi
