@@ -18,7 +18,7 @@ export const getDBPool = async (secret) => {
   // Test the connection
   try {
     const client = await pool.connect();
-    console.log('Successfully connected to the PostgreSQL database !!');
+    console.log('Successfully connected to the PostgreSQL database !!!');
     client.release();
   } catch (err) {
     console.error('Error connecting to the database', err);
