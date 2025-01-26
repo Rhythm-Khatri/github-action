@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM template for Zenoti Appointment CheckIn Update Approval DB workflow
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+    - dev
+    - prod
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-0cdaf62b906f46e0e
+  PrivateSubnetIds:
+    Type: CommaDelimitedList
+    Description: List of private subnet IDs for the Lambda function
+    Default: subnet-0d4ad096b4b13c8fc,subnet-014ffa04ebbff5731,subnet-016b58cf5819cd0cd
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security Group ID
+    Default: sg-02a3782f5c1927171
+Resources:
+  ZenotiAppointmentCheckinUpdateDBRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventBusName: AppointmentsZenoti
+      Name: ZenotiAppointmentCheckinUpdateDBRule
+      EventPattern:
+        detail:
+          event_type:
+          - AppointmentGroup.Status
+        source:
+        - zenoti
+      Targets:
+      - Arn:
+          Fn::GetAtt:
+          - AppointmentCheckinUpdateDB
+          - Arn
+        Id: AppointmentCheckinUpdateDBTarget
+  AppointmentCheckinUpdateDB:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-appointmentCheckinUpdateDB
+      CodeUri: AppointmentCheckinUpdateDB
+      Handler: index.handler
+      Runtime: nodejs18.x
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          ENVIRONMENT:
+            Ref: Environment
+          SECRET_NAME: dev/us-west-2/dev-emr-skinlaundry-cluster/backend/emr-be
+      VpcConfig:
+        SecurityGroupIds:
+        - Ref: SecurityGroupId
+        SubnetIds:
+          Ref: PrivateSubnetIds
+      Policies:
+      - VPCAccessPolicy: {}
+      - AWSLambdaVPCAccessExecutionRole
+      - Statement:
+        - Effect: Allow
+          Action:
+          - secretsmanager:GetSecretValue
+          Resource: '*'
+        - Effect: Allow
+          Action:
+          - rds-db:connect
+          Resource: '*'
+    Metadata:
+      SamResourceId: AppointmentCheckinUpdateDB
+  AppointmentCheckinUpdateDBEventInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: AppointmentCheckinUpdateDB
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - ZenotiAppointmentCheckinUpdateDBRule
+        - Arn
+Outputs:
+  AppointmentCheckinUpdateDBArn:
+    Description: ARN of the  Lambda function
+    Value:
+      Fn::GetAtt:
+      - AppointmentCheckinUpdateDB
+      - Arn
+  ZenotiAppointmentCheckinUpdateDBRuleArn:
+    Description: ARN of the Zenoti Appointment Checkin Update Rule
+    Value:
+      Fn::GetAtt:
+      - ZenotiAppointmentCheckinUpdateDBRule
+      - Arn

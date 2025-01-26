@@ -1,0 +1,128 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Notification Service Infrastructure
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-0cdaf62b906f46e0e
+  PrivateSubnetIds:
+    Type: CommaDelimitedList
+    Description: List of private subnet IDs for the Lambda function
+    Default: subnet-0d4ad096b4b13c8fc,subnet-014ffa04ebbff5731,subnet-016b58cf5819cd0cd
+
+Resources:
+  # SQS Queue
+  NotificationQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${Environment}-notification-queue
+      VisibilityTimeout: 310  # Set slightly higher than Lambda timeout
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 2
+
+  # Dead Letter Queue
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${Environment}-notification-dlq
+
+  # Lambda Function
+  NotificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-notification-function
+      CodeUri: .
+      Handler: index.handler
+      Runtime: nodejs18.x
+      Timeout: 300
+      MemorySize: 256
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds: !Ref PrivateSubnetIds
+      Policies:
+        - VPCAccessPolicy: {}
+        - AWSLambdaBasicExecutionRole
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - sqs:ReceiveMessage
+                - sqs:DeleteMessage
+                - sqs:GetQueueAttributes
+              Resource: !GetAtt NotificationQueue.Arn
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - docdb:*
+              Resource: "*"
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt NotificationQueue.Arn
+            BatchSize: 10
+
+  # Lambda Security Group (no inbound, all outbound)
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${Environment}-lambda-sg
+      GroupDescription: Security group for Lambda function
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+
+  # DocumentDB Security Group
+  DocumentDBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${Environment}-documentdb-sg
+      GroupDescription: Security group for DocumentDB
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 27017
+          ToPort: 27017
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+
+  # Update existing DocumentDB Cluster Security Group
+  DocumentDBClusterSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DocumentDBSecurityGroup
+      IpProtocol: tcp
+      FromPort: 27017
+      ToPort: 27017
+      SourceSecurityGroupId: !Ref LambdaSecurityGroup
+
+Outputs:
+  NotificationQueueUrl:
+    Description: URL of the Notification SQS Queue
+    Value: !Ref NotificationQueue
+  NotificationQueueArn:
+    Description: ARN of the Notification SQS Queue
+    Value: !GetAtt NotificationQueue.Arn
+  DeadLetterQueueUrl:
+    Description: URL of the Dead Letter SQS Queue
+    Value: !Ref DeadLetterQueue
+  DeadLetterQueueArn:
+    Description: ARN of the Dead Letter SQS Queue
+    Value: !GetAtt DeadLetterQueue.Arn
+  LambdaFunctionArn:
+    Description: ARN of the Lambda Function
+    Value: !GetAtt NotificationFunction.Arn

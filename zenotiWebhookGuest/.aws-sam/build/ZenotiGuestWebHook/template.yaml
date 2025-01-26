@@ -1,0 +1,119 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM template for Zenoti Webhook Guest
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-0cdaf62b906f46e0e
+  PrivateSubnetIds:
+    Type: CommaDelimitedList
+    Description: List of private subnet IDs for the Lambda function
+    Default: subnet-0d4ad096b4b13c8fc,subnet-014ffa04ebbff5731,subnet-016b58cf5819cd0cd
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security Group ID
+    Default: sg-02a3782f5c1927171
+
+Resources:
+  GuestZenotiEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: GuestZenoti
+
+  ZenotiGuestCreatedWebHookEvent:
+    Type: AWS::Events::Rule
+    Properties:
+      EventBusName: !Ref GuestZenotiEventBus
+      Name: ZenotiGuestCreatedWebHookEvent
+      EventPattern:
+        detail:
+          event_type:
+            - Guest.Created
+        source:
+          - zenoti
+      Targets:
+        - Arn: !GetAtt ZenotiGuestWebHook.Arn
+          Id: ZenotiGuestCreatedWebHookTarget
+
+  ZenotiGuestUpdatedWebHookEvent:
+    Type: AWS::Events::Rule
+    Properties:
+      EventBusName: !Ref GuestZenotiEventBus
+      Name: ZenotiGuestUpdatedWebHookEvent
+      EventPattern:
+        detail:
+          event_type:
+            - Guest.Updated
+        source:
+          - zenoti
+      Targets:
+        - Arn: !GetAtt ZenotiGuestWebHook.Arn
+          Id: ZenotiGuestUpdatedWebHookTarget
+
+  ZenotiGuestWebHook:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-zenotiWebhookGuest
+      CodeUri: .
+      Handler: index.handler
+      Runtime: nodejs18.x
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          SECRET_NAME: dev/us-west-2/dev-emr-skinlaundry-cluster/backend/emr-be
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SecurityGroupId
+        SubnetIds: !Ref PrivateSubnetIds
+      Policies:
+      - VPCAccessPolicy: {}
+      - AWSLambdaVPCAccessExecutionRole
+      - Statement:
+          - Effect: Allow
+            Action:
+              - secretsmanager:GetSecretValue
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - rds-db:connect
+            Resource: "*"
+
+  ZenotiGuestCreatedWebHookEventInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ZenotiGuestWebHook
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ZenotiGuestCreatedWebHookEvent.Arn
+  
+  ZenotiGuestUpdatedWebHookEventInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ZenotiGuestWebHook
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ZenotiGuestUpdatedWebHookEvent.Arn
+
+Outputs:
+  ZenotiGuestWebHookArn:
+    Description: ARN of the Zenoti Guest WebHook
+    Value: !GetAtt ZenotiGuestWebHook.Arn
+  GuestZenotiEventBusArn:
+    Description: ARN of the GuestZenoti Event Bus
+    Value: !GetAtt GuestZenotiEventBus.Arn
+  ZenotiGuestCreatedWebHookEventRuleArn:
+    Description: ARN of the Zenoti Guest Created WebHook Rule
+    Value: !GetAtt ZenotiGuestCreatedWebHookEvent.Arn
+  ZenotiGuestUpdatedWebHookEventRuleArn:
+    Description: ARN of the  Zenoti Guest Updated WebHook Rule
+    Value: !GetAtt ZenotiGuestUpdatedWebHookEvent.Arn

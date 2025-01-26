@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM template for Zenoti Appointment Modification workflow
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-0cdaf62b906f46e0e
+  PrivateSubnetIds:
+    Type: CommaDelimitedList
+    Description: List of private subnet IDs for the Lambda function
+    Default: subnet-0d4ad096b4b13c8fc,subnet-014ffa04ebbff5731,subnet-016b58cf5819cd0cd
+
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security Group ID
+    Default: sg-02a3782f5c1927171
+
+Resources:
+  ZenotiAppointmentModifyRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventBusName: AppointmentsZenoti
+      Name: ZenotiAppointmentModify
+      EventPattern:
+        detail:
+          data:
+            appointments:
+              id:
+                - exists: true
+          event_type:
+            - AppointmentGroup.Updated
+        source:
+          - zenoti
+      Targets:
+        - Arn: !GetAtt ModifyAppointmentFunction.Arn
+          Id: ModifyAppointmentTarget
+
+  ModifyAppointmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${Environment}-modify-appointment
+      CodeUri: .
+      Handler: index.handler
+      Runtime: nodejs18.x
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          SECRET_NAME: dev/us-west-2/dev-emr-skinlaundry-cluster/backend/emr-be
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SecurityGroupId
+        SubnetIds: !Ref PrivateSubnetIds
+      Policies:
+      - VPCAccessPolicy: {}
+      - AWSLambdaVPCAccessExecutionRole
+      - Statement:
+          - Effect: Allow
+            Action:
+              - secretsmanager:GetSecretValue
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - rds-db:connect
+            Resource: "*"
+
+  ModifyAppointmentFunctionEventInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ModifyAppointmentFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ZenotiAppointmentModifyRule.Arn
+
+Outputs:
+  ModifyAppointmentFunctionArn:
+    Description: ARN of the Modify Appointment Lambda function
+    Value: !GetAtt ModifyAppointmentFunction.Arn
+  ZenotiAppointmentModifyRuleArn:
+    Description: ARN of the Zenoti Appointment Modify Rule
+    Value: !GetAtt ZenotiAppointmentModifyRule.Arn

@@ -1,0 +1,12 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "ENR-deleteAppointment"
+resolve_s3 = true
+s3_prefix = "ENR-deleteAppointment"
+region = "us-west-2"
+profile = "prod-profile"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+disable_rollback = true
+parameter_overrides = "Environment=\"prod\" VpcId=\"vpc-0cdaf62b906f46e0e\" PrivateSubnetIds=\"subnet-0d4ad096b4b13c8fc,subnet-014ffa04ebbff5731,subnet-016b58cf5819cd0cd\" SecurityGroupId=\"sg-02a3782f5c1927171\""
+image_repositories = []

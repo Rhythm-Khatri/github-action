@@ -1,0 +1,14 @@
+.terraform
+.vscode
+*.tfstate
+*.tfstate.backup
+*.out
+.terragrunt-cache
+.bundle
+.ruby-version
+.terraform.lock.hcl
+node_modules/
+# System Files
+.DS_Store
+Thumbs.db
+.env
