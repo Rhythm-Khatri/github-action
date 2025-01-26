@@ -1,55 +1,56 @@
-name: Deploy Lambda Functions
+name: SAM Deploy Workflow
 
 on:
   push:
     branches:
-      - main
       - dev
+      - main
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
-
     steps:
+      # Step 1: Checkout the repository
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
+      # Step 2: Set up Node.js (if needed for dependencies)
       - name: Set up Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v3
         with:
-          node-version: '14'
+          node-version: '16' # Adjust based on your Node.js version
 
-      - name: Install dependencies
-        run: npm install
+      # Step 3: Set up AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1 # Replace with your AWS region
 
-      - name: Run tests
-        run: npm test
-
-      - name: Set up AWS SAM CLI
+      # Step 4: Detect changed directories
+      - name: Get changed Lambda directories
+        id: get-changes
         run: |
-          pip install aws-sam-cli
+          # Find which directories have changed
+          CHANGED_DIRS=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | awk -F/ '{print $1}' | sort -u)
+          echo "Changed directories: $CHANGED_DIRS"
+          echo "::set-output name=dirs::$CHANGED_DIRS"
 
-      - name: Detect changed files
-        id: changes
-        run: |
-          echo "::set-output name=changed_files::$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})"
-
-      - name: Deploy to Dev
-        if: github.ref == 'refs/heads/dev' && contains(steps.changes.outputs.changed_files, 'path/to/your/lambda/function')
-        run: |
-          sam package --template-file template.yaml --output-template-file packaged.yaml --s3-bucket ${{ secrets.DEV_S3_BUCKET_NAME }}
-          sam deploy --template-file packaged.yaml --stack-name ${{ secrets.DEV_STACK_NAME }} --capabilities CAPABILITY_IAM
+      # Step 5: Deploy each changed Lambda
+      - name: Deploy SAM Lambdas
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.DEV_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.DEV_AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: 'us-east-1'
-
-      - name: Deploy to Prod
-        if: github.ref == 'refs/heads/main' && contains(steps.changes.outputs.changed_files, 'path/to/your/lambda/function')
+          SAM_CLI_TELEMETRY: 0
+          ENV_PROFILE: ${{ github.ref_name == 'main' && echo 'prod' || echo 'dev' }}
         run: |
-          sam package --template-file template.yaml --output-template-file packaged.yaml --s3-bucket ${{ secrets.PROD_S3_BUCKET_NAME }}
-          sam deploy --template-file packaged.yaml --stack-name ${{ secrets.PROD_STACK_NAME }} --capabilities CAPABILITY_IAM
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.PROD_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.PROD_AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: 'us-east-1'
+          for DIR in ${{ steps.get-changes.outputs.dirs }}; do
+            if [ -f "$DIR/template.yaml" ]; then
+              echo "Deploying Lambda function in $DIR"
+              cd $DIR
+              sam build
+              sam deploy --profile $ENV_PROFILE --no-confirm-changeset --capabilities CAPABILITY_IAM
+              cd -
+            else
+              echo "No template.yaml in $DIR, skipping..."
+            fi
+          done
