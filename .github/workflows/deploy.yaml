@@ -79,7 +79,7 @@ jobs:
                 exit 1
               fi
               echo "Running sam deploy in $DIR for $DEPLOY_ENV environment"
-              sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM
+              sam deploy --no-confirm-changeset --no-fail-on-empty-changeset
               if [ $? -ne 0 ]; then
                 echo "sam deploy failed in $DIR"
                 exit 1
