@@ -38,7 +38,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
           aws-region: us-west-2 # Replace with your AWS region
 
-      # Step 4: Detect changed directories
+      # Step 5: Detect changed directories
       - name: Get changed Lambda directories
         id: get-changes
         run: |
@@ -47,18 +47,33 @@ jobs:
           echo "Changed directories: $CHANGED_DIRS"
           echo "::set-output name=dirs::$CHANGED_DIRS"
 
-      # Step 5: Deploy each changed Lambda
+      # Step 6: Deploy each changed Lambda
       - name: Deploy SAM Lambdas
         env:
           SAM_CLI_TELEMETRY: 0
           ENV_PROFILE: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
         run: |
+          echo "Environment: $ENV_PROFILE"
           for DIR in ${{ steps.get-changes.outputs.dirs }}; do
             if [ -f "$DIR/template.yaml" ]; then
               echo "Deploying Lambda function in $DIR"
               cd $DIR
+              echo "Running sam build in $DIR"
               sam build
+              if [ $? -eq 0 ]; then
+                echo "sam build successful in $DIR"
+              else
+                echo "sam build failed in $DIR"
+                exit 1
+              fi
+              echo "Running sam deploy in $DIR"
               sam deploy --profile $ENV_PROFILE --no-confirm-changeset --capabilities CAPABILITY_IAM
+              if [ $? -eq 0 ]; then
+                echo "sam deploy successful in $DIR"
+              else
+                echo "sam deploy failed in $DIR"
+                exit 1
+              fi
               cd -
             else
               echo "No template.yaml in $DIR, skipping..."
