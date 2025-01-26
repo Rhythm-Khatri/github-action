@@ -41,7 +41,7 @@ jobs:
       - name: Deploy SAM Lambdas
         env:
           SAM_CLI_TELEMETRY: 0
-          ENV_PROFILE: ${{ github.ref_name == 'main' && echo 'prod' || echo 'dev' }}
+          ENV_PROFILE: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
         run: |
           for DIR in ${{ steps.get-changes.outputs.dirs }}; do
             if [ -f "$DIR/template.yaml" ]; then
