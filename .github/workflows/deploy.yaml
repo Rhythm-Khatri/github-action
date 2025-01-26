@@ -59,11 +59,13 @@ jobs:
           SAM_CLI_TELEMETRY: 0
           CHANGED_DIRS: ${{ env.dirs }}
         run: |
-          # Determine the environment (dev or prod)
+          # Determine the environment (dev or prod) and set the config file
           if [ "${{ github.ref }}" == "refs/heads/main" ]; then
             DEPLOY_ENV="prod"
+            CONFIG_FILE="samconfig-prod.toml"
           else
             DEPLOY_ENV="dev"
+            CONFIG_FILE="samconfig-dev.toml"
           fi
 
           echo "Deploying to environment: $DEPLOY_ENV"
@@ -78,8 +80,8 @@ jobs:
                 echo "sam build failed in $DIR"
                 exit 1
               fi
-              echo "Running sam deploy in $DIR for $DEPLOY_ENV environment"
-              sam deploy --no-confirm-changeset --no-fail-on-empty-changeset
+              echo "Running sam deploy in $DIR for $DEPLOY_ENV environment using $CONFIG_FILE"
+              sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --config-file $CONFIG_FILE
               if [ $? -ne 0 ]; then
                 echo "sam deploy failed in $DIR"
                 exit 1
