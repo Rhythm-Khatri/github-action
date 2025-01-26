@@ -4,7 +4,6 @@ stack_name = "EMR-modifyAppointment"
 resolve_s3 = true
 s3_prefix = "EMR-modifyAppointment"
 region = "us-west-2"
-profile = "prod-profile"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 disable_rollback = true
