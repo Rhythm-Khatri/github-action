@@ -62,8 +62,10 @@ jobs:
           # Determine the environment (dev or prod)
           if [ "${{ github.ref }}" == "refs/heads/main" ]; then
             DEPLOY_ENV="prod"
+            AWS_PROFILE="prod-profile"
           else
             DEPLOY_ENV="dev"
+            AWS_PROFILE="dev-profile"
           fi
 
           echo "Deploying to environment: $DEPLOY_ENV"
@@ -79,7 +81,7 @@ jobs:
                 exit 1
               fi
               echo "Running sam deploy in $DIR for $DEPLOY_ENV environment"
-              sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM
+              sam deploy --profile $AWS_PROFILE --no-confirm-changeset --capabilities CAPABILITY_IAM
               if [ $? -ne 0 ]; then
                 echo "sam deploy failed in $DIR"
                 exit 1
