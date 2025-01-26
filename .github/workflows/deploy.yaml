@@ -10,9 +10,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Checkout the repository
+      # Step 1: Checkout the repository with full history
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Fetch the full history to avoid shallow clones
 
       # Step 2: Set up Node.js (if needed for dependencies)
       - name: Set up Node.js
@@ -42,8 +44,12 @@ jobs:
       - name: Get changed Lambda directories
         id: get-changes
         run: |
+          # Use HEAD~1 as a fallback if github.event.before is unavailable
+          BASE_COMMIT=${{ github.event.before || 'HEAD~1' }}
+          echo "Base commit: $BASE_COMMIT"
+
           # Find which directories have changed
-          CHANGED_DIRS=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | awk -F/ '{print $1}' | sort -u)
+          CHANGED_DIRS=$(git diff --name-only $BASE_COMMIT ${{ github.sha }} | awk -F/ '{print $1}' | sort -u)
           echo "Changed directories: $CHANGED_DIRS"
           echo "dirs=$CHANGED_DIRS" >> $GITHUB_ENV
 
